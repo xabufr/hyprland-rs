@@ -1,4 +1,5 @@
 use std::ops::{AddAssign, MulAssign, Neg};
+use std::str::FromStr;
 
 mod error;
 #[cfg(test)]
@@ -74,13 +75,17 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    // Parse the JSON identifier `true` or `false`.
+    // Parse the JSON identifier `1` or `0`.
     fn parse_bool(&mut self) -> Result<bool> {
-        let c = self.next_char()?;
-        if self.input.starts_with(',') {
-            self.input = &self.input[1..];
+        let (has_next, field) = self.get_next_field()?;
+        if has_next {
+            return Err(Error::ExpectedBoolean);
         }
-        Ok(c == '1')
+        match field {
+            "0" => Ok(false),
+            "1" => Ok(true),
+            _ => Err(Error::ExpectedBoolean),
+        }
     }
 
     // Parse a group of decimal digits as an unsigned integer of type T.
@@ -90,28 +95,13 @@ impl<'de> Deserializer<'de> {
     // panic or return bogus data. But it is good enough for example code!
     fn parse_unsigned<T>(&mut self) -> Result<T>
     where
-        T: AddAssign<T> + MulAssign<T> + From<u8>,
+        T: FromStr,
     {
-        let mut int = match self.next_char()? {
-            ch @ '0'..='9' => T::from(ch as u8 - b'0'),
-            _ => {
-                return Err(Error::ExpectedInteger);
-            }
-        };
-        loop {
-            match self.input.chars().next() {
-                Some(ch @ '0'..='9') => {
-                    self.input = &self.input[1..];
-                    int *= T::from(10);
-                    int += T::from(ch as u8 - b'0');
-                }
-                Some(',') => {
-                    self.input = &self.input[1..];
-                    return Ok(int);
-                }
-                _ => return Ok(int),
-            }
+        let (has_next, field) = self.get_next_field()?;
+        if has_next {
+            return Err(Error::ExpectedInteger);
         }
+        field.parse().map_err(|_| Error::ExpectedInteger)
     }
 
     // Parse a possible minus sign followed by a group of decimal digits as a
@@ -129,30 +119,30 @@ impl<'de> Deserializer<'de> {
     // Makes no attempt to handle escape sequences. What did you expect? This is
     // example code!
     fn parse_string(&mut self) -> Result<&'de str> {
-        let til_end = self.remaining_fields.map(|f| f == 0).unwrap_or(false);
-        match (til_end, self.input.find(',')) {
-            (false, Some(end)) => {
-                let s = &self.input[..end];
-                self.input = &self.input[end + 1..];
-                Ok(s)
-            }
-            _ => {
-                let s = &self.input[..];
-                self.input = &self.input[self.input.len()..];
-                Ok(s)
-            }
-        }
+        let (_, v) = self.get_next_field()?;
+        Ok(v)
     }
 
-    fn next_field(&mut self) -> Result<()> {
-        let fields = *self
+    fn get_next_field(&mut self) -> Result<(bool, &'de str)> {
+        let fields = self
             .remaining_fields
-            .as_mut()
             .ok_or_else(|| Error::Message("No fields set".into()))?;
         if fields > 0 {
             self.remaining_fields = Some(fields - 1);
         }
-        Ok(())
+        let til_end = self.remaining_fields.unwrap() == 0;
+        match (til_end, self.input.find(',')) {
+            (false, Some(end)) => {
+                let s = &self.input[..end];
+                self.input = &self.input[end + 1..];
+                Ok((false, s))
+            }
+            (_, found) => {
+                let s = &self.input[..];
+                self.input = &self.input[self.input.len()..];
+                Ok((found.is_some(), s))
+            }
+        }
     }
 }
 
@@ -170,7 +160,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_bool(self.parse_bool()?)
     }
 
@@ -178,7 +167,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_i8(self.parse_signed()?)
     }
 
@@ -186,7 +174,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_i16(self.parse_signed()?)
     }
 
@@ -194,7 +181,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_i32(self.parse_signed()?)
     }
 
@@ -202,7 +188,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_i64(self.parse_signed()?)
     }
 
@@ -210,7 +195,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_u8(self.parse_unsigned()?)
     }
 
@@ -218,7 +202,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_u16(self.parse_unsigned()?)
     }
 
@@ -226,7 +209,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_u32(self.parse_unsigned()?)
     }
 
@@ -234,7 +216,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_u64(self.parse_unsigned()?)
     }
 
@@ -265,7 +246,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         visitor.visit_borrowed_str(self.parse_string()?)
     }
 
@@ -302,7 +282,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.next_field()?;
         if self.input.starts_with(',') || self.input.is_empty() {
             if !self.input.is_empty() {
                 self.next_char()?;

@@ -48,6 +48,7 @@ struct TupleStruct(u32, String);
 #[case::option_none("VariantOption>>", MyEnum::VariantOption(None))]
 #[case::option_some("VariantOption>>1", MyEnum::VariantOption(Some(true)))]
 #[case::option_none_start("VariantOptionFirst>>,1", MyEnum::VariantOptionFirst(None, 1))]
+#[case::option_some_start("VariantOptionFirst>>1,1", MyEnum::VariantOptionFirst(Some(true), 1))]
 #[case::tuple("VariantTuple>>1,toto", MyEnum::VariantTuple(TupleStruct(1, "toto".into())))]
 fn test_successful_deserialization_cases(#[case] s: &str, #[case] expected: MyEnum) {
     let d: MyEnum = from_str(s).unwrap();
