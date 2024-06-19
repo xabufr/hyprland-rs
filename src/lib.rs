@@ -26,6 +26,8 @@ pub mod data;
 #[cfg(feature = "listener")]
 pub mod event_listener;
 
+pub mod events;
+
 /// This module is for calling dispatchers and changing keywords
 #[cfg(feature = "dispatch")]
 pub mod dispatch;
