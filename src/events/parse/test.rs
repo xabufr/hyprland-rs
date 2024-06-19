@@ -18,6 +18,7 @@ enum MyEnum {
     VariantOptionFirst(Option<bool>, u32),
     VariantTuple(TupleStruct),
     VariantSigned(i32),
+    VariantNewType(NewStr),
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
@@ -31,6 +32,9 @@ struct Variant6Data {
 
 #[derive(Deserialize, PartialEq, Debug)]
 struct Variant7Data;
+
+#[derive(Deserialize, PartialEq, Debug)]
+struct NewStr(String);
 
 #[derive(Deserialize, PartialEq, Debug)]
 struct TupleStruct(u32, String);
@@ -52,6 +56,7 @@ struct TupleStruct(u32, String);
 #[case::option_some_start("VariantOptionFirst>>1,1", MyEnum::VariantOptionFirst(Some(true), 1))]
 #[case::tuple("VariantTuple>>1,toto", MyEnum::VariantTuple(TupleStruct(1, "toto".into())))]
 #[case::signed("VariantSigned>>-51", MyEnum::VariantSigned(-51))]
+#[case::new_type("VariantNewType>>test", MyEnum::VariantNewType(NewStr("test".into())))]
 fn test_successful_deserialization_cases(#[case] s: &str, #[case] expected: MyEnum) {
     let d: MyEnum = from_str(s).unwrap();
     assert_eq!(expected, d);
