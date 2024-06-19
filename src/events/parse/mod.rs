@@ -93,7 +93,7 @@ impl<'de> Deserializer<'de> {
     // This implementation is a bit too lenient, for example `001` is not
     // allowed in JSON. Also the various arithmetic operations can overflow and
     // panic or return bogus data. But it is good enough for example code!
-    fn parse_unsigned<T>(&mut self) -> Result<T>
+    fn parse_integer<T>(&mut self) -> Result<T>
     where
         T: FromStr,
     {
@@ -102,16 +102,6 @@ impl<'de> Deserializer<'de> {
             return Err(Error::ExpectedInteger);
         }
         field.parse().map_err(|_| Error::ExpectedInteger)
-    }
-
-    // Parse a possible minus sign followed by a group of decimal digits as a
-    // signed integer of type T.
-    fn parse_signed<T>(&mut self) -> Result<T>
-    where
-        T: Neg<Output = T> + AddAssign<T> + MulAssign<T> + From<i8>,
-    {
-        // Optional minus sign, delegate to `parse_unsigned`, negate if negative.
-        unimplemented!()
     }
 
     // Parse a string until the next '"' character.
@@ -167,56 +157,56 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_i8(self.parse_signed()?)
+        visitor.visit_i8(self.parse_integer()?)
     }
 
     fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_i16(self.parse_signed()?)
+        visitor.visit_i16(self.parse_integer()?)
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_i32(self.parse_signed()?)
+        visitor.visit_i32(self.parse_integer()?)
     }
 
     fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_i64(self.parse_signed()?)
+        visitor.visit_i64(self.parse_integer()?)
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_u8(self.parse_unsigned()?)
+        visitor.visit_u8(self.parse_integer()?)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_u16(self.parse_unsigned()?)
+        visitor.visit_u16(self.parse_integer()?)
     }
 
     fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_u32(self.parse_unsigned()?)
+        visitor.visit_u32(self.parse_integer()?)
     }
 
     fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_u64(self.parse_unsigned()?)
+        visitor.visit_u64(self.parse_integer()?)
     }
 
     // Float parsing is stupidly hard.
