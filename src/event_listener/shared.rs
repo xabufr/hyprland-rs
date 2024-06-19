@@ -669,7 +669,7 @@ static EVENT_SET: Lazy<Box<[(ParsedEventType, Regex)]>> = Lazy::new(|| {
 });
 
 /// This internal function parses event strings
-pub(crate) fn event_parser(event: String) -> crate::Result<Vec<Event>> {
+pub(crate) fn event_parser(event: &str) -> crate::Result<Vec<Event>> {
     // TODO: Optimize nested looped regex capturing. Maybe pull in rayon if possible.
     let event_iter = event
         .trim()
