@@ -4,10 +4,7 @@ mod error;
 #[cfg(test)]
 mod test;
 
-use serde::de::{
-    self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess,
-    Visitor,
-};
+use serde::de::{self, DeserializeSeed, EnumAccess, SeqAccess, VariantAccess, Visitor};
 use serde::Deserialize;
 
 use self::error::{Error, Result};
@@ -56,24 +53,20 @@ where
 impl<'de> Deserializer<'de> {
     // Look at the first character in the input without consuming it.
     fn peek_char(&mut self) -> Result<char> {
-        eprintln!("peek char");
         self.input.chars().next().ok_or(Error::Eof)
     }
 
     // Consume the first character in the input.
     fn next_char(&mut self) -> Result<char> {
-        eprintln!("next char");
         let ch = self.peek_char()?;
         self.input = &self.input[ch.len_utf8()..];
         Ok(ch)
     }
 
     fn parse_event_name(&mut self) -> Result<&'de str> {
-        eprintln!("parse_event_name: {}", self.input);
         match self.input.find(">>") {
             Some(len) => {
                 let name = &self.input[..len];
-                eprintln!("parse_event_name: found {}", name);
                 self.input = &self.input[len + 2..];
                 Ok(name)
             }
@@ -85,10 +78,8 @@ impl<'de> Deserializer<'de> {
     fn parse_bool(&mut self) -> Result<bool> {
         let c = self.next_char()?;
         if self.input.starts_with(',') {
-            eprintln!("next");
             self.input = &self.input[1..];
         }
-        eprintln!("c: {}", c);
         Ok(c == '1')
     }
 
@@ -101,7 +92,6 @@ impl<'de> Deserializer<'de> {
     where
         T: AddAssign<T> + MulAssign<T> + From<u8>,
     {
-        eprintln!("parse unsigned");
         let mut int = match self.next_char()? {
             ch @ '0'..='9' => T::from(ch as u8 - b'0'),
             _ => {
@@ -139,13 +129,11 @@ impl<'de> Deserializer<'de> {
     // Makes no attempt to handle escape sequences. What did you expect? This is
     // example code!
     fn parse_string(&mut self) -> Result<&'de str> {
-        eprintln!("parse string: '{}'", self.input);
         let til_end = self.remaining_fields.map(|f| f == 0).unwrap_or(false);
         match (til_end, self.input.find(',')) {
             (false, Some(end)) => {
                 let s = &self.input[..end];
                 self.input = &self.input[end + 1..];
-                eprintln!("parse string: found '{}', input: '{}'", s, self.input);
                 Ok(s)
             }
             _ => {
@@ -277,7 +265,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize str");
         self.next_field()?;
         visitor.visit_borrowed_str(self.parse_string()?)
     }
@@ -286,7 +273,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize string");
         self.deserialize_str(visitor)
     }
 
@@ -316,7 +302,15 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.next_field()?;
+        if self.input.starts_with(',') || self.input.is_empty() {
+            if !self.input.is_empty() {
+                self.next_char()?;
+            }
+            visitor.visit_none()
+        } else {
+            visitor.visit_some(self)
+        }
         // if self.input.starts_with("null") {
         //     self.input = &self.input["null".len()..];
         //     visitor.visit_none()
@@ -330,7 +324,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize_unit");
         visitor.visit_unit()
     }
 
@@ -339,42 +332,27 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize_unit_struct");
         self.deserialize_unit(visitor)
     }
 
     // As is done here, serializers are encouraged to treat newtype structs as
     // insignificant wrappers around the data they contain. That means not
     // parsing anything other than the contained value.
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
+    fn deserialize_newtype_struct<V>(self, _name: &'static str, _visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_newtype_struct(self)
+        unimplemented!();
     }
 
     // Deserialization of compound types like sequences and maps happens by
     // passing the visitor an "Access" object that gives it the ability to
     // iterate through the data contained in the sequence.
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_seq<V>(self, _visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize seq");
         unimplemented!()
-        // // Parse the opening bracket of the sequence.
-        // if self.next_char()? == '[' {
-        //     // Give the visitor access to each element of the sequence.
-        //     let value = visitor.visit_seq(CommaSeparated::new(self))?;
-        //     // Parse the closing bracket of the sequence.
-        //     if self.next_char()? == ']' {
-        //         Ok(value)
-        //     } else {
-        //         Err(Error::ExpectedArrayEnd)
-        //     }
-        // } else {
-        //     Err(Error::ExpectedArray)
-        // }
     }
 
     // Tuples look just like sequences in JSON. Some formats may be able to
@@ -388,7 +366,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.remaining_fields = Some(len);
-        visitor.visit_seq(CommaSeparated::new(self))
+        visitor.visit_seq(SimpleSeqAccess::new(self))
     }
 
     // Tuple structs look just like sequences in JSON.
@@ -401,7 +379,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize_tuple_struct");
         self.deserialize_tuple(len, visitor)
     }
 
@@ -414,14 +391,13 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
     fn deserialize_struct<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize struct: {}: {:?}", name, fields);
         self.deserialize_tuple(fields.len(), visitor)
     }
 
@@ -434,7 +410,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize enum");
         visitor.visit_enum(Enum::new(self))
     }
 
@@ -446,7 +421,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        eprintln!("deserialize_identifier");
         visitor.visit_borrowed_str(self.parse_event_name()?)
     }
 
@@ -461,45 +435,40 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     // Some formats are not able to implement this at all. Formats that can
     // implement `deserialize_any` and `deserialize_ignored_any` are known as
     // self-describing.
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_ignored_any<V>(self, _visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        eprintln!("deser ingored any");
-        self.deserialize_any(visitor)
+        unimplemented!();
     }
 }
 
 // In order to handle commas correctly when deserializing a JSON array or map,
 // we need to track whether we are on the first element or past the first
 // element.
-struct CommaSeparated<'a, 'de: 'a> {
+struct SimpleSeqAccess<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
 }
 
-impl<'a, 'de> CommaSeparated<'a, 'de> {
+impl<'a, 'de> SimpleSeqAccess<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
-        CommaSeparated { de }
+        SimpleSeqAccess { de }
     }
 }
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
-impl<'de, 'a> SeqAccess<'de> for CommaSeparated<'a, 'de> {
+impl<'de, 'a> SeqAccess<'de> for SimpleSeqAccess<'a, 'de> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
         T: DeserializeSeed<'de>,
     {
-        eprintln!("seq access next element seed");
         // Deserialize an array element.
         seed.deserialize(&mut *self.de).map(Some)
     }
 }
-
-// `MapAccess` is provided to the `Visitor` to give it the ability to iterate
-// through entries of the map.
 
 struct Enum<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
@@ -524,12 +493,7 @@ impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        // The `deserialize_enum` method parsed a `{` character so we are
-        // currently inside of a map. The seed will be deserializing itself from
-        // the key of the map.
-        eprintln!("enum variant_seed");
         let val = seed.deserialize(&mut *self.de)?;
-        // Parse the colon separating map key from value.
         Ok((val, self))
     }
 }
@@ -543,34 +507,27 @@ impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
         Ok(())
     }
 
-    // Newtype variants are represented in JSON as `{ NAME: VALUE }` so
-    // deserialize the value here.
+    // Variant with a single value
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
     where
         T: DeserializeSeed<'de>,
     {
-        eprintln!("newtype variant seed");
+        // Single value == 1 field
         self.de.remaining_fields = Some(1);
         seed.deserialize(self.de)
     }
 
-    // Tuple variants are represented in JSON as `{ NAME: [DATA...] }` so
-    // deserialize the sequence of data here.
     fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        eprintln!("variant tuple variant");
         de::Deserializer::deserialize_tuple(self.de, len, visitor)
     }
 
-    // Struct variants are represented in JSON as `{ NAME: { K: V, ... } }` so
-    // deserialize the inner map here.
     fn struct_variant<V>(self, fields: &'static [&'static str], visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        eprintln!("variant struct variant: {:?}", fields);
         de::Deserializer::deserialize_struct(self.de, "", fields, visitor)
     }
 }
